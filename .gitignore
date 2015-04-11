@@ -1,0 +1,16 @@
+/.DS_Store
+.DS_Store
+.idea
+**/*.swp
+**settings.js.txt
+*cred.*
+**.backup
+flows_raspberrypi.json
+*.sh
+**temboo
+flows_*.json
+.config.json
+settings.js
+node_modules/**
+*.log
+*events.txt

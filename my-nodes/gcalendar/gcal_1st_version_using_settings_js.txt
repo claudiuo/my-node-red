@@ -1,0 +1,174 @@
+gcalendar.html
+-----------------------------------------------------------------------------------------------
+<!--
+  Copyright 2013 IBM Corp.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+<script type="text/x-red" data-template-name="gcalendar">
+    <div class="form-row">
+        <label for="node-input-name"><i class="icon-tag"></i>Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-calendarId"><i class="icon-tag"></i>CalendarID</label>
+        <input type="text" id="node-input-calendarId" placeholder="CalendarID">
+    </div>
+    <div class="form-tips">Google Calendar Calendar ID (default value set in settings.js)</div>
+</script>
+
+<script type="text/x-red" data-help-name="gcalendar">
+    <p>Google Calendar GetNextItem output node.</p>
+    <p>Returns the timestamp of the next event.</p>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('gcalendar',{
+        category: 'social-function',
+        color:"#ffcc66",
+        defaults: {
+            name: {value:""},
+            calendarId: {value:""}
+        },
+        inputs:1,
+        outputs:1,
+        icon: "arrow-in.png",
+        align: "right",
+        label: function() {
+            return this.name||"gcalendar";
+        },
+        labelStyle: function() {
+            return this.name?"node_label_italic":"";
+        }
+    });
+</script>
+===============================================================================================
+gcalendar.js
+-----------------------------------------------------------------------------------------------
+/**
+ * Copyright 2013 IBM Corp.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ **/
+
+// TODO: implement more functions in a drop down and change the Coreo call according to the function selected
+
+// TODO: add optional event name field
+
+var RED = require(process.env.NODE_RED_HOME+"/red/red");
+var tsession = require("temboo/core/temboosession");
+var Google = require("temboo/Library/Google/Calendar");
+
+var session;
+
+try {
+    var gcalendarkey = RED.settings.gcalendar;
+}
+catch(err) {}
+
+if (gcalendarkey && gcalendarkey.tembooUsername
+        && gcalendarkey.tembooAppname && gcalendarkey.tembooAppkey) {
+    session = new tsession.TembooSession(gcalendarkey.tembooUsername,
+                gcalendarkey.tembooAppname, gcalendarkey.tembooAppkey);
+} else {
+    this.error("missing gcalendar Temboo credentials");
+    return;
+}
+
+function GetCalendarNextItemTimestamp(n) {
+    RED.nodes.createNode(this,n);
+    var node = this;
+
+    if (gcalendarkey) {
+        this.clientSecret = gcalendarkey.clientSecret;
+        this.refreshToken = gcalendarkey.refreshToken;
+        this.clientId = gcalendarkey.clientId;
+        this.calendarId = gcalendarkey.calendarId;
+    } else {
+        this.error("missing gcalendar credentials");
+        return;
+    }
+
+    if(!this.calendarId && !n.calendarId) {
+        this.error("No Calendar ID set.");
+    }
+
+    // if calendarId defined in the form, use it instead of the one in settings
+    if(n.calendarId) {
+        this.calendarId = n.calendarId;
+    }
+
+    this.on("input",function(msg) {
+
+        var getNextEventChoreo = new Google.GetNextEvent(session);
+
+        // Instantiate and populate the input set for the choreo
+        var getNextEventInputs = getNextEventChoreo.newInputSet();
+
+        // Set inputs
+        getNextEventInputs.set_ClientSecret(this.clientSecret);
+        getNextEventInputs.set_RefreshToken(this.refreshToken);
+        getNextEventInputs.set_ClientID(this.clientId);
+        getNextEventInputs.set_CalendarID(this.calendarId);
+
+        // Run the choreo, specifying success and error callback handlers
+        getNextEventChoreo.execute(
+            getNextEventInputs,
+            function(results){
+                var msg = {};
+                var response = results.get_Response();
+                var jsonRes = JSON.parse(response);
+                // check in case we got no response
+                if(jsonRes != undefined && jsonRes != {} && jsonRes.start != undefined) {
+                    var eventDate = new Date(jsonRes.start.dateTime);
+                    msg.payload = eventDate.getTime();
+                }
+                console.log(msg.payload);
+                node.send(msg);
+            },
+            function(error){
+                var msg = {};
+                console.log(error.type);
+                console.log(error.message);
+                msg.error = error.message;
+                node.send(msg);
+            }
+        );
+    });
+}
+
+RED.nodes.registerType("gcalendar",GetCalendarNextItemTimestamp);
+===============================================================================================
+credentials stored in settings.js
+-----------------------------------------------------------------------------------------------
+    gcalendar: { clientSecret:"<your Google API client secret>",
+				 refreshToken:"<your Google API refresh token>",
+				 clientId:"<your Google API client ID>",
+				 tembooUsername:"<your temboo username>",
+				 tembooAppname:"<your temboo app name>",
+				 tembooAppkey:"<your temboo app key>",
+				 calendarId:"<your Google calendar ID>"
+    },
+===============================================================================================
+
