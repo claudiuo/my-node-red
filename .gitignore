@@ -10,7 +10,7 @@ flows_raspberrypi.json
 **temboo
 flows_*.json
 .config.json
-#settings.js
+settings.js
 node_modules/**
 *.log
 *events.txt
